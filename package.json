@@ -1,0 +1,16 @@
+{
+  "name": "git-remote-ckb",
+  "version": "0.1.0",
+  "description": "Git remote helper using Nervos CKB as a backend",
+  "main": "index.js",
+  "author": "Xuejie Xiao <xxuejie@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@ckb-lumos/base": "^0.8.0",
+    "@ckb-lumos/common-scripts": "^0.8.0",
+    "@ckb-lumos/config-manager": "^0.8.0",
+    "@ckb-lumos/helpers": "^0.8.0",
+    "ckb-js-toolkit": "^0.9.1",
+    "tempy": "^0.6.0"
+  }
+}
