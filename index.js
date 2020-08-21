@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const { execSync } = require("child_process");
 const { mkdirSync, readFileSync, writeFileSync } = require("fs");
 const { createInterface } = require("readline");
 const { normalize, join } = require("path");
@@ -23,7 +24,9 @@ const MODE_PUSHING = 2;
 
 const DEFAULT_REMOTE = "refs/heads/master";
 
-require("fs").unlinkSync("./git-remote-ckb-debug.log");
+try {
+  require("fs").unlinkSync("./git-remote-ckb-debug.log");
+} catch(e) {}
 function debugLog(...args) {
   let str = "";
   for (const arg of args) {
@@ -36,6 +39,16 @@ function debugLog(...args) {
 function debugLogAndExit(...args) {
   debugLog(...args);
   process.exit(1);
+}
+
+function hasBranch(name) {
+  try {
+    execSync(`git rev-parse ${name} &> /dev/null`);
+  } catch (e) {
+    debugLog(e);
+    return false;
+  }
+  return true;
 }
 
 (async () => {
@@ -73,7 +86,7 @@ function debugLogAndExit(...args) {
         }
         let localTipHash = null;
         try {
-          localTipHash = "0x" + execSync("git rev-parse HEAD").toString("utf8");
+          localTipHash = "0x" + execSync("git rev-parse HEAD").toString("utf8").trim();
         } catch (e) {}
         const bundles = await downloadFromCkb(URL, localTipHash);
         for (const bundle of bundles) {
@@ -88,11 +101,18 @@ function debugLogAndExit(...args) {
         if (commands[1] !== `${DEFAULT_REMOTE}:${DEFAULT_REMOTE}`) {
           process.exit(1);
         }
+        if (!hasBranch("master")) {
+          break;
+        }
         const file = tempy.file();
-        execSync(`git bundle create ${file} origin/master..master`);
+        if (hasBranch("origin/master")) {
+          execSync(`git bundle create ${file} origin/master..master`);
+        } else {
+          execSync(`git bundle create ${file} --all master`);
+        }
         const data = "0x" + readFileSync(file, "hex");
-        const tipHash = "0x" + execSync("git rev-parse HEAD").toString("utf8");
-        await sendToCkb(data, tipHash, URL);
+        const pushTipHash = "0x" + execSync("git rev-parse HEAD").toString("utf8").trim();
+        await sendToCkb(data, pushTipHash, URL);
         break;
       case "":
         if (currentMode === MODE_FETCHING || currentMode === MODE_PUSHING) {

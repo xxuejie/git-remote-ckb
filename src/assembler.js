@@ -14,8 +14,6 @@ const tempy = require("tempy");
 
 const { CkbIndexerQuerier } = require("./querier");
 
-// TODO: mainnet support later
-process.env.LUMOS_CONFIG_NAME = "AGGRON4";
 initializeConfig();
 
 // TODO: RPC customization later
@@ -23,7 +21,7 @@ const CKB_RPC_URL = "http://127.0.0.1:8114";
 const CKB_INDEXER_URL = "http://127.0.0.1:8116";
 
 // TODO: fee customization, for now we hardcode to 0.01 CKB.
-const FEE = BigInt(1000000);'
+const FEE = BigInt(1000000);
 
 const TYPE_ID_CODE_HASH = "0x00000000000000000000000000000000000000000000000000545950455f4944";
 const INITIAL_TIP_HASH = "0x0000000000000000000000000000000000000000";
@@ -50,7 +48,7 @@ async function createRepository(address) {
   skeleton = skeleton.update("outputs", (outputs) => {
     return outputs.push({
       cell_output: {
-        capacity: "0x" + (BigInt(138) * BigInt(100000000)).toString(16),
+        capacity: "0x" + (BigInt(146) * BigInt(100000000)).toString(16),
         lock: parseAddress(address),
         type: {
           code_hash: TYPE_ID_CODE_HASH,
@@ -63,9 +61,17 @@ async function createRepository(address) {
       block_hash: undefined,
     });
   });
-  skeleton = await common.injectCapacity(skeleton, 0, [fromAddress]);
+  skeleton = skeleton.update("fixedEntries", (fixedEntries) => {
+    return fixedEntries.push(
+      {
+        field: "outputs",
+        index: 0,
+      }
+    );
+  });
+  skeleton = await common.injectCapacity(skeleton, [address], BigInt(146) * BigInt(100000000), address);
   const hasher = new CKBHasher();
-  let inputCell = skeleton.get("inputs")!.get(0)!;
+  let inputCell = skeleton.get("inputs").get(0);
   hasher.update(
     core.SerializeCellInput(
       normalizers.NormalizeCellInput({
@@ -87,17 +93,13 @@ async function createRepository(address) {
       {
         field: "inputs",
         index: 0,
-      },
-      {
-        field: "outputs",
-        index: 0,
       }
     );
   });
   skeleton = await common.payFee(skeleton, [address], FEE);
   skeleton = common.prepareSigningEntries(skeleton);
   const hash = await signAndSendTransactionSkeleton(skeleton, address);
-  const remoteUrl = `ckb://${address}:${typeId}`;
+  const remoteUrl = `ckb://${address}@${typeId}`;
   return {
     hash,
     remoteUrl,
@@ -135,7 +137,9 @@ async function locateRepositoryCell(remoteUrl) {
 async function sendToCkb(data, newTipHash, remoteUrl) {
   const { address, cell, typeId } = await locateRepositoryCell(remoteUrl);
   let skeleton = TransactionSkeleton({ cellProvider: new CkbIndexerQuerier(CKB_INDEXER_URL) });
-  skeleton = skeleton.update("outputs", (outputs) => {
+  skeleton = skeleton.update("inputs", (inputs) => {
+    return inputs.push(cell);
+  }).update("outputs", (outputs) => {
     return outputs.push({
       cell_output: cell.cell_output,
       data: newTipHash,
@@ -143,14 +147,6 @@ async function sendToCkb(data, newTipHash, remoteUrl) {
       block_hash: undefined,
     });
   });
-  const { skeleton } = await common.setupInputCell(skeleton, cell, address);
-  const oldWitnessArgs = new core.WitnessArgs(new Reader(skeleton.get("witnesses").get(0)));
-  const witnessArgs = {
-    lock: new Reader(oldWitnessArgs.getLock().value().raw()),
-    input_type: new Reader(data),
-  };
-  const witness = core.SerializeWitnessArgs(normalizers.NormalizeWitnessArgs(witnessArgs));
-  skeleton = skeleton.set("witnesses", (witnesses) => witnesses.set(0, witness));
   skeleton = skeleton.update("fixedEntries", (fixedEntries) => {
     return fixedEntries.push(
       {
@@ -164,6 +160,14 @@ async function sendToCkb(data, newTipHash, remoteUrl) {
     );
   });
   skeleton = await common.payFee(skeleton, [address], FEE);
+  const oldWitnessArgs = new core.WitnessArgs(new Reader(skeleton.get("witnesses").get(0)));
+  const witnessArgs = {
+    lock: new Reader(oldWitnessArgs.getLock().value().raw()),
+    input_type: new Reader(data),
+  };
+  const witnessBuffer = core.SerializeWitnessArgs(normalizers.NormalizeWitnessArgs(witnessArgs));
+  const witness = new Reader(witnessBuffer).serializeJson();
+  skeleton = skeleton.update("witnesses", (witnesses) => witnesses.set(0, witness));
   skeleton = common.prepareSigningEntries(skeleton);
   return await signAndSendTransactionSkeleton(skeleton, address);
 }
@@ -174,7 +178,7 @@ async function queryTipHash(remoteUrl) {
     if (cell.data !== INITIAL_TIP_HASH) {
       return cell.data;
     }
-  } catch (return) {}
+  } catch (e) {}
   return null;
 }
 

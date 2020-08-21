@@ -20,11 +20,12 @@ class CkbIndexerCollector {
     toBlock = null,
     skip = null,
   }) {
+    if (type === "empty") {
+      type = null;
+      this.emptyType = true;
+    }
     if (lock && type) {
       throw new Error("Either lock or type is supported, you cannot specify both!");
-    }
-    if (type === "empty") {
-      throw new Error("Empty type is not supported!");
     }
     if ((lock && lock.script) ||
         (type && type.script)) {
@@ -60,6 +61,9 @@ class CkbIndexerCollector {
         break;
       }
       for (const object of objects) {
+        if (this.emptyType && object.output.type) {
+          continue;
+        }
         yield {
           cell_output: object.output,
           data: object.output_data,

@@ -5,6 +5,15 @@
   "main": "index.js",
   "author": "Xuejie Xiao <xxuejie@gmail.com>",
   "license": "MIT",
+  "files": [
+    "index.js",
+    "create_repository.js",
+    "src"
+  ],
+  "bin": {
+    "git-remote-ckb": "./index.js",
+    "git-remote-ckb-create-repository": "./create_repository.js"
+  },
   "dependencies": {
     "@ckb-lumos/base": "^0.8.0",
     "@ckb-lumos/common-scripts": "^0.8.0",
