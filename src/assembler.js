@@ -147,6 +147,15 @@ async function sendToCkb(data, newTipHash, remoteUrl) {
       block_hash: undefined,
     });
   });
+  const result = await common.setupInputCell(skeleton, cell, address);
+  skeleton = result.txSkeleton;
+  const oldWitnessArgs = new core.WitnessArgs(new Reader(skeleton.get("witnesses").get(0)));
+  const witnessArgs = {
+    lock: new Reader(oldWitnessArgs.getLock().value().raw()),
+    input_type: new Reader(data),
+  };
+  const witness = core.SerializeWitnessArgs(normalizers.NormalizeWitnessArgs(witnessArgs));
+  skeleton = skeleton.set("witnesses", (witnesses) => witnesses.set(0, witness));
   skeleton = skeleton.update("fixedEntries", (fixedEntries) => {
     return fixedEntries.push(
       {
@@ -160,14 +169,6 @@ async function sendToCkb(data, newTipHash, remoteUrl) {
     );
   });
   skeleton = await common.payFee(skeleton, [address], FEE);
-  const oldWitnessArgs = new core.WitnessArgs(new Reader(skeleton.get("witnesses").get(0)));
-  const witnessArgs = {
-    lock: new Reader(oldWitnessArgs.getLock().value().raw()),
-    input_type: new Reader(data),
-  };
-  const witnessBuffer = core.SerializeWitnessArgs(normalizers.NormalizeWitnessArgs(witnessArgs));
-  const witness = new Reader(witnessBuffer).serializeJson();
-  skeleton = skeleton.update("witnesses", (witnesses) => witnesses.set(0, witness));
   skeleton = common.prepareSigningEntries(skeleton);
   return await signAndSendTransactionSkeleton(skeleton, address);
 }
